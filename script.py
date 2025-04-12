@@ -80,7 +80,6 @@ with open("letterboxd_ratings.csv", "w", newline="", encoding="utf-8") as csvfil
                     my_numeric_rating = int(rating_class.split("-")[1]) / 2 if rating_class else 0
                 else:
                     my_numeric_rating = 0
-
                 if my_numeric_rating == 0:
                     continue
 
@@ -102,8 +101,9 @@ with open("letterboxd_ratings.csv", "w", newline="", encoding="utf-8") as csvfil
                             avg_user_numeric = "N/A"
 
                         print(f"{title}: My Rating: {my_numeric_rating}, Average Rating: {avg_user_numeric}, IMDb Rating: {imdb_rating}")
-                        writer.writerow([title, my_numeric_rating, avg_user_numeric, imdb_rating])
-                        films_data.append({
+                        if avg_user_numeric != "N/A":
+                            writer.writerow([title, my_numeric_rating, avg_user_numeric, imdb_rating])
+                            films_data.append({
                             "title": title,
                             "my_rating": my_numeric_rating,
                             "avg_user_rating": avg_user_numeric,
@@ -111,24 +111,8 @@ with open("letterboxd_ratings.csv", "w", newline="", encoding="utf-8") as csvfil
                         })
                     else:
                         print(f"  → Failed to get film page: {film_response.status_code}")
-                        writer.writerow([title, my_numeric_rating, "N/A", imdb_rating])
-
-                        films_data.append({
-                            "title": title,
-                            "my_rating": my_numeric_rating,
-                            "avg_user_rating": "N/A",
-                            "imdb_rating": imdb_rating
-                        })
                 else:
                     print(f"  → No slug found for {title}. Skipping.")
-                    writer.writerow([title, my_numeric_rating, "N/A", "N/A"])
-
-                    films_data.append({
-                        "title": title,
-                        "my_rating": my_numeric_rating,
-                        "avg_user_rating": "N/A",
-                        "imdb_rating": "N/A"
-                    })
 
                 time.sleep(0.1)
 

@@ -51,6 +51,10 @@ def get_imdb_rating(imdb_id):
     return 0
 
 start_time = time.time()
+film_count = 0
+my_rating_sum = 0
+letterboxd_rating_sum = 0
+imdb_rating_sum = 0
 films_data = []
 
 with open("letterboxd_ratings.csv", "w", newline="", encoding="utf-8") as csvfile:
@@ -66,7 +70,7 @@ with open("letterboxd_ratings.csv", "w", newline="", encoding="utf-8") as csvfil
             films = soup.find_all("li", class_="poster-container")
 
             if not films:
-                print("No films found on this page. Exiting.")
+                print('\n')
                 break
 
             for film in films:
@@ -100,15 +104,20 @@ with open("letterboxd_ratings.csv", "w", newline="", encoding="utf-8") as csvfil
                         else:
                             avg_user_numeric = "N/A"
 
+                        if avg_user_numeric == "N/A":
+                            continue
                         print(f"{title}: My Rating: {my_numeric_rating}, Average Rating: {avg_user_numeric}, IMDb Rating: {imdb_rating}")
-                        if avg_user_numeric != "N/A":
-                            writer.writerow([title, my_numeric_rating, avg_user_numeric, imdb_rating])
-                            films_data.append({
-                            "title": title,
-                            "my_rating": my_numeric_rating,
-                            "avg_user_rating": avg_user_numeric,
-                            "imdb_rating": imdb_rating
+                        writer.writerow([title, my_numeric_rating, avg_user_numeric, imdb_rating])
+                        films_data.append({
+                        "title": title,
+                        "my_rating": my_numeric_rating,
+                        "avg_user_rating": avg_user_numeric,
+                        "imdb_rating": imdb_rating
                         })
+                        film_count = film_count + 1
+                        my_rating_sum = my_rating_sum + my_numeric_rating
+                        letterboxd_rating_sum = letterboxd_rating_sum + avg_user_numeric
+                        imdb_rating_sum = imdb_rating_sum + imdb_rating
                     else:
                         print(f"  → Failed to get film page: {film_response.status_code}")
                 else:
@@ -125,4 +134,9 @@ with open("letterboxd_ratings.json", "w", encoding="utf-8") as jsonfile:
     json.dump(films_data, jsonfile, ensure_ascii=False, indent=4)
 end_time = time.time()
 elapsed_time = end_time - start_time
-print(f"Scraping complete. Elapsed time: {elapsed_time:.2f} seconds.")
+print(f"Elapsed time: {elapsed_time:.2f} seconds.")
+print(f"Average time per film: {elapsed_time / film_count:.2f} seconds.")
+print(f"Film count: {film_count} films.")
+print(f"My average score is {my_rating_sum/film_count:.2f}")
+print(f"The Letterboxd average score is {letterboxd_rating_sum/film_count:.2f}")
+print(f"The IMDB average score is {imdb_rating_sum/film_count:.2f}")

@@ -5,7 +5,7 @@
 ```
   python -m pip install beautifulsoup4
 ```
-* make sure to replace api_key.example with your own api key in a file called api_key.txt This can be generated at www.omdbapi.com
+* don't forget to replace api_key.example with your own api key in a file called api_key.txt This can be generated at www.omdbapi.com
 * specify targeted profile by changing the profile variable in script.py or specify it when running the program. For example,
 ```
   python script.py watermullins

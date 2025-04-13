@@ -1,5 +1,6 @@
 # Movie Scraper
 ## Setup and Running ##
+* make sure python is installed and cd into the same folder as the program.
 * install beautiful soup with the command:
 ```
   python -m pip install beautifulsoup4

@@ -93,7 +93,7 @@ with open("letterboxd_ratings.csv", "w", newline="", encoding="utf-8") as csvfil
                 if film_slug:
                     film_url = f"https://letterboxd.com/film/{film_slug}/"
                     imdb_id = get_imdb_id(film_url)
-                    imdb_rating = get_imdb_rating(imdb_id) if imdb_id else 0
+                    imdb_rating = get_imdb_rating(imdb_id)/2 if imdb_id else 0
 
                     film_response = requests.get(film_url, headers=headers)
                     if film_response.status_code == 200:
@@ -136,6 +136,7 @@ end_time = time.time()
 elapsed_time = end_time - start_time
 print(f"Elapsed time: {elapsed_time:.2f} seconds.")
 print(f"Average time per film: {elapsed_time / film_count:.2f} seconds.")
+print("All scores adjusted to 5-point scale")
 print(f"Film count: {film_count} films.")
 print(f"My average score is {my_rating_sum/film_count:.2f}")
 print(f"The Letterboxd average score is {letterboxd_rating_sum/film_count:.2f}")

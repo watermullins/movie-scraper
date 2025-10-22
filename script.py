@@ -7,8 +7,8 @@ import re
 import sys
 
 if len(sys.argv) < 2:
-    print("no argument, defaulting to watermullins' profile")
     profile = 'watermullins'
+    print(f"no argument, defaulting to {profile}'s profile")
 else:
     profile = sys.argv[1]
 
@@ -17,127 +17,110 @@ headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36"
 }
 
-def get_api_key():
+def get_film_details(film_url):
     try:
-        with open('api_key.txt', 'r') as file:
-            key = file.read().strip()
-            return key
-    except FileNotFoundError:
-        print("Missing the file called api_key.txt with your API key for www.omdbapi.com")
-    sys.exit(1)
+        r = requests.get(film_url, headers=headers, timeout=10)
+        if r.status_code != 200:
+            return "N/A", [], "N/A", []
+        soup = BeautifulSoup(r.text, "html.parser")
 
-api_key = get_api_key()
+        year_tag = soup.select_one("a[href*='/year/']")
+        year = year_tag.get_text(strip=True) if year_tag else "N/A"
+        director_tags = soup.select("a[href*='/director/']")
+        directors = []
+        for d in director_tags:
+            name = d.get_text(strip=True)
+            if name and name not in directors:
+                directors.append(name)
+        directors = directors[:1]
 
-def get_imdb_id(film_url):
-    response = requests.get(film_url, headers=headers)
-    if response.status_code == 200:
-        soup = BeautifulSoup(response.text, 'html.parser')
-        imdb_link = soup.find("a", href=re.compile(r"^http://www.imdb.com/title/tt"))
-        if imdb_link:
-            imdb_id = imdb_link["href"].split("/")[4]
-            return imdb_id
-    return None
+        meta = soup.find("meta", {"name": "twitter:data2"})
+        if meta and "out of" in meta.get("content", ""):
+            try:
+                avg_rating = float(meta["content"].split(" ")[0])
+            except Exception:
+                avg_rating = "N/A"
+        else:
+            avg_rating = "N/A"
 
-def get_imdb_rating(imdb_id):
-    url = f'http://www.omdbapi.com/?i={imdb_id}&apikey={api_key}'
-    response = requests.get(url)
-    data = response.json()
-    if data.get('Response') == 'True':
-        imdb_rating = data.get('imdbRating', '0')
-        try:
-            return float(imdb_rating)
-        except ValueError:
-            return 0
-    return 0
+        genres = [
+            g.get_text(strip=True)
+            for g in soup.select("a[href*='/films/genre/']")
+            if g.get_text(strip=True)
+        ]
+
+        return year, directors, avg_rating, genres
+    except Exception:
+        return "N/A", [], "N/A", []
 
 start_time = time.time()
 film_count = 0
 my_rating_sum = 0
 letterboxd_rating_sum = 0
-imdb_rating_sum = 0
 films_data = []
 
 with open("letterboxd_ratings.csv", "w", newline="", encoding="utf-8") as csvfile:
     writer = csv.writer(csvfile)
-    writer.writerow(["Title", "My Rating", "Letterboxd AVG", "IMDb AVG"])
-
+    writer.writerow(["Title", "Year", "Director", "Genres", "My Rating", "Letterboxd AVG"])
     page_number = 1
     while True:
         paged_url = f"{base_url}/page/{page_number}/"
-        response = requests.get(paged_url, headers=headers)
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.text, 'html.parser')
-            films = soup.find_all("li", class_="poster-container")
-
-            if not films:
-                print('\n')
-                break
-
-            for film in films:
-                img_tag = film.find("img")
-                title = img_tag["alt"] if img_tag else "Unknown Title"
-
-                rating_tag = film.find("span", class_=re.compile(r"rated-\d+"))
-                if rating_tag:
-                    class_names = rating_tag.get("class", [])
-                    rating_class = next((cls for cls in class_names if cls.startswith("rated-")), None)
-                    my_numeric_rating = int(rating_class.split("-")[1]) / 2 if rating_class else 0
-                else:
-                    my_numeric_rating = 0
-                if my_numeric_rating == 0:
-                    continue
-
-                film_div = film.find("div", class_="really-lazy-load")
-                film_slug = film_div["data-film-slug"] if film_div and "data-film-slug" in film_div.attrs else None
-
-                if film_slug:
-                    film_url = f"https://letterboxd.com/film/{film_slug}/"
-                    imdb_id = get_imdb_id(film_url)
-                    imdb_rating = get_imdb_rating(imdb_id)/2 if imdb_id else 0
-
-                    film_response = requests.get(film_url, headers=headers)
-                    if film_response.status_code == 200:
-                        film_soup = BeautifulSoup(film_response.text, 'html.parser')
-                        avg_rating_tag = film_soup.find("meta", {"name": "twitter:data2"})
-                        if avg_rating_tag and "out of" in avg_rating_tag["content"]:
-                            avg_user_numeric = float(avg_rating_tag["content"].split(" ")[0])
-                        else:
-                            avg_user_numeric = "N/A"
-
-                        if avg_user_numeric == "N/A":
-                            continue
-                        print(f"{title}: My Rating: {my_numeric_rating}, Average Rating: {avg_user_numeric}, IMDb Rating: {imdb_rating}")
-                        writer.writerow([title, my_numeric_rating, avg_user_numeric, imdb_rating])
-                        films_data.append({
-                        "title": title,
-                        "my_rating": my_numeric_rating,
-                        "avg_user_rating": avg_user_numeric,
-                        "imdb_rating": imdb_rating
-                        })
-                        film_count = film_count + 1
-                        my_rating_sum = my_rating_sum + my_numeric_rating
-                        letterboxd_rating_sum = letterboxd_rating_sum + avg_user_numeric
-                        imdb_rating_sum = imdb_rating_sum + imdb_rating
-                    else:
-                        print(f"  → Failed to get film page: {film_response.status_code}")
-                else:
-                    print(f"  → No slug found for {title}. Skipping.")
-
-                time.sleep(0.1)
-
-            page_number += 1
-        else:
-            print(f"Failed to get ratings page. Status: {response.status_code}")
+        try:
+            r = requests.get(paged_url, headers=headers, timeout=10)
+        except Exception as e:
+            print(f"Failed to fetch page {page_number}: {e}")
             break
+        if r.status_code != 200:
+            print(f"Reached non-200 status ({r.status_code}) at page {page_number}")
+            break
+        soup = BeautifulSoup(r.text, "html.parser")
+        films = soup.find_all("li", class_="griditem")
+        if not films:
+            break
+        for film in films:
+            poster = film.find("div", attrs={"data-component-class": "LazyPoster"})
+            if not poster:
+                continue
+            title = poster.get("data-item-name", "Unknown Title")
+            rating_span = film.find("span", class_=re.compile(r"rated-\d+"))
+            if rating_span:
+                rating_class = next((cls for cls in rating_span["class"] if cls.startswith("rated-")), None)
+                my_numeric_rating = int(rating_class.split("-")[1]) / 2 if rating_class else 0
+            else:
+                my_numeric_rating = 0
+            # if my_numeric_rating == 0:
+            #     continue
+            film_slug = poster.get("data-item-slug")
+            film_url = f"https://letterboxd.com/film/{film_slug}/"
+            year, directors, avg_user_numeric, genres = get_film_details(film_url)
+            # if avg_user_numeric == "N/A":
+            #     continue
+            print(f"Title: {title} | Year: {year} | Directors: {', '.join(directors)} | My: {my_numeric_rating}, Avg: {avg_user_numeric}, Genres: {', '.join(genres)}")
+            writer.writerow([title, year, "; ".join(directors), ", ".join(genres), my_numeric_rating, avg_user_numeric])
+            films_data.append({
+                "title": title,
+                "year": year,
+                "directors": directors,
+                "genres": genres,
+                "my_rating": my_numeric_rating,
+                "avg_user_rating": avg_user_numeric
+            })
+            film_count += 1
+            my_rating_sum += my_numeric_rating
+            letterboxd_rating_sum = 0
+            # letterboxd_rating_sum += float(avg_user_numeric)
+        page_number += 1
+        time.sleep(0.1)
 
 with open("letterboxd_ratings.json", "w", encoding="utf-8") as jsonfile:
     json.dump(films_data, jsonfile, ensure_ascii=False, indent=4)
-end_time = time.time()
-elapsed_time = end_time - start_time
-print(f"Elapsed time: {elapsed_time:.2f} seconds.")
-print(f"Average time per film: {elapsed_time / film_count:.2f} seconds.")
+
+elapsed = time.time() - start_time
+print(f"\nElapsed time: {elapsed:.2f} seconds.")
+if film_count:
+    print(f"Average time per film: {elapsed/film_count:.2f} seconds.")
 print("All scores adjusted to 5-point scale")
 print(f"Film count: {film_count} films.")
-print(f"My average score is {my_rating_sum/film_count:.2f}")
-print(f"The Letterboxd average score is {letterboxd_rating_sum/film_count:.2f}")
-print(f"The IMDB average score is {imdb_rating_sum/film_count:.2f}")
+if film_count:
+    print(f"My average score: {my_rating_sum/film_count:.2f}")
+    print(f"Letterboxd average score: {letterboxd_rating_sum/film_count:.2f}")
